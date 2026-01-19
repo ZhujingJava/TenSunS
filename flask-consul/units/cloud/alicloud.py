@@ -148,11 +148,66 @@ def ecs(account,region,isextip=False):
             )
             ecs = client.describe_instances(describe_instances_request)
             ecs_list = ecs.body.instances.to_map()['Instance']
-            ecs_dict_temp = {i['InstanceId']:{
-                'name':i['InstanceName'],'group':group_dict.get(i['ResourceGroupId'],'无'),'ostype':i['OSType'].lower(),'status':i['Status'],'region':region,
-                'ip':i["InnerIpAddress"]["IpAddress"][0] if i["InnerIpAddress"]["IpAddress"] else i['NetworkInterfaces']['NetworkInterface'][0].get('PrimaryIpAddress','NoneInnerIp'),
-                'cpu':f"{i['Cpu']}核",'mem':f"{str(round(i['Memory']/1024,1)).rstrip('.0')}GB",'exp':i['ExpiredTime'].split('T')[0],'ecstag': i.get('Tags',{}).get('Tag',[])
-                }for i in ecs_list}
+            # ecs_dict_temp = {i['InstanceId']:{
+            #     'name':i['InstanceName'],'group':group_dict.get(i['ResourceGroupId'],'无'),'ostype':i['OSType'].lower(),'status':i['Status'],'region':region,
+            #     'ip':i["InnerIpAddress"]["IpAddress"][0] if i["InnerIpAddress"]["IpAddress"] else i['NetworkInterfaces']['NetworkInterface'][0].get('PrimaryIpAddress','NoneInnerIp'),
+            #     'cpu':f"{i['Cpu']}核",'mem':f"{str(round(i['Memory']/1024,1)).rstrip('.0')}GB",'exp':i['ExpiredTime'].split('T')[0],'ecstag': i.get('Tags',{}).get('Tag',[])
+            #     }for i in ecs_list}
+            # 构建包含更多字段的实例字典，保留原有字段并补充 sync_cmdb_agent 所需字段
+            ecs_dict_temp = {
+                i['InstanceId']: {
+                    # 原有字段
+                    'name': i.get('InstanceName'),
+                    'group': group_dict.get(i.get('ResourceGroupId'), '无'),
+                    'ostype': i.get('OSType', '').lower(),
+                    'status': i.get('Status'),
+                    'region': region,
+                    'ip': (
+                        i.get('InnerIpAddress', {}).get('IpAddress')[0]
+                        if i.get('InnerIpAddress', {}).get('IpAddress')
+                        else i.get('NetworkInterfaces', {}).get('NetworkInterface', [{}])[0].get('PrimaryIpAddress',
+                                                                                                 'NoneInnerIp')
+                    ),
+                    'cpu': f"{i.get('Cpu')}核" if i.get('Cpu') is not None else None,
+                    'mem': (
+                        f"{str(round(i.get('Memory', 0) / 1024, 1)).rstrip('.0')}GB"
+                        if i.get('Memory') is not None
+                        else None
+                    ),
+                    'exp': i.get('ExpiredTime', '').split('T')[0] if i.get('ExpiredTime') else None,
+                    'ecstag': i.get('Tags', {}).get('Tag', []),
+                    # 扩展字段，补齐 sync_cmdb_agent 中使用的字段
+                    'InstanceName': i.get('InstanceName'),
+                    'hostname': i.get('HostName'),
+                    'SerialNumber': i.get('SerialNumber'),
+                    'zone_id': i.get('RegionId', region),
+                    'ZoneId': i.get('ZoneId'),
+                    'OSName': i.get('OSName'),
+                    'OSTypeFull': i.get('OSType'),
+                    'Memory': round(i.get('Memory', 0) / 1024, 1) if i.get('Memory') is not None else None,
+                    'vcpu': i.get('Cpu'),
+                    'InstanceType': i.get('InstanceType'),
+                    'CreationTime': i.get('CreationTime'),
+                    'ExpiredTime': i.get('ExpiredTime'),
+                    'ResourceGroupId': i.get('ResourceGroupId'),
+                    'EipAddress': i.get('EipAddress'),
+                    'PublicIpAddress': (
+                        i.get('PublicIpAddress', {}).get('IpAddress', [])
+                        if isinstance(i.get('PublicIpAddress'), dict)
+                        else i.get('PublicIpAddress')
+                    ),
+                    'InnerIpAddress': (
+                        i.get('InnerIpAddress', {}).get('IpAddress', [])
+                        if isinstance(i.get('InnerIpAddress'), dict)
+                        else i.get('InnerIpAddress')
+                    ),
+                    'VpcAttributes': i.get('VpcAttributes'),
+                    'InstanceNetworkType': i.get('InstanceNetworkType'),
+                    'ServerStatus': i.get('Status'),
+                    'Description': i.get('Description'),
+                }
+                for i in ecs_list
+            }
 
             if isextip:
                 for i in ecs_list:
